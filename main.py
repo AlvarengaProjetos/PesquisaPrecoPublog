@@ -5,7 +5,7 @@ from ctypes import * # Importa toda a lib, está escrito de forma implícita.
 
 def criar_lista(string_tab):
     """
-    Retorna uma lista com sublistas sem Duplicatas de NIIN e FSC
+    Recebe uma string e retorna uma lista com sublistas sem Duplicatas de NIIN e FSC
     """
     lista = []
     palavra = ""
@@ -21,6 +21,11 @@ def criar_lista(string_tab):
 
 # 1º Etapa: Pesquisar NIIN através do PN e CFF(CAGE_CODE)
 def pesquisar_niin(PN, CFF):
+    """
+    A presente função receberá dados da lista chamada 'tabela' que é composta do cabeçalho da plnanilha 'arquivo.csv. 
+    Será printado no console se o PN foi encontrado e quantos foram encontrados no banco de dados do PubLog.
+    A função retornará o inteiro 0 se nada for econtrado, e se o PN for encontrado a função retorna o NIIN, que será um número inteiro maior do que 0.
+    """    
     print("> Part Number: "+ PN + " - CFF: " + CFF)
     consulta = (
         "select NIIN from P_PART_PICK where PART_NUMBER='"+ PN +"'"+" AND CAGE_CODE='"+ CFF +"'"
@@ -38,11 +43,19 @@ def pesquisar_niin(PN, CFF):
     
     string = (data.value.decode('utf-8'))
     lista = criar_lista(string)
+    print(lista[1])
     return lista[1]
+    
 
 
 # 2º Etapa: Pesquisar Unit_Price utilizando NIIN acrescentando na Lista
 def pesquisar_preco_medio(NIIN):
+    """
+    Essa função recebe o número inteiro NIIN oriúndo do retorno da função 'pesquisar_niin'.
+    Ela verifica no banco de dados do Publog quantos preços existem para o PN buscado.
+    Será printado no console quantos preços foram encontrados.
+    A função retornará a média dos preços encontrados.
+    """    
     sniin = str(NIIN)
     consulta = ("select UNIT_PRICE from V_FLIS_MANAGEMENT where NIIN='" + sniin.strip() + "'")
     comandoSQL = consulta.encode('utf-8')  # Conversão da string para bytes
@@ -64,20 +77,25 @@ def pesquisar_preco_medio(NIIN):
 
 # Função para retorno de mensagem de quantidade de preços
 def mensagem_quantidade_preços(NIIN):
+    """
+    Essa função recebe o número inteiro NIIN oriúndo do retorno da função 'pesquisar_niin'.
+    Ela verifica no banco de dados do Publog quantos preços existem para o PN buscado.
+    A função retornará uma string informando via console quantos preços foram encontrados
+    """
     sniin = str(NIIN)
     consulta = ("select UNIT_PRICE from V_FLIS_MANAGEMENT where NIIN='" + sniin.strip() + "'")
     comandoSQL = consulta.encode('utf-8')  # Conversão da string para bytes
     matches = dll.IMDSqlDLL(comandoSQL, data, length)
     
     if matches == 1:
-        return"Apenas um preço foi encontrado para este item."
+        return "Apenas um preço foi encontrado para este item."
     else:
-        return"Há " + str(matches) + " preços para este item."
+        return "Há " + str(matches) + " preços para este item."
 
 
 #---------------------------------- Programa Principal ---------------------------------
 
-# As seguintes variáveis e constantes são necessárias para o acesso ao 
+# As seguintes variáveis e constantes são necessárias para o acesso ao banco de dados do PubLog
 MAX_SIZE = 4096  # data & error buffer size in bytes
 PATH_TO_DLL = "publog\TOOLS\MS12\DecompDl64.dll" # Caminho relativo, presume
 PATH_TO_FEDLOG = "publog" # Caminho relativo
@@ -92,25 +110,19 @@ print("Programa de Pesquisa de Preço por PN e CFF.\n\n")
 if(dll.IMDConnectDLL(path)):
     print("Invalid Path\n")
     sys.exit
-#print("Sample search using the return buffer:\n")
+    print("Sample search using the return buffer:\n")
 
+# ABERTURA DO "arquivo.csv" PARA CONVERSÃO EM LISTA
 arquivo = open("arquivo.csv")
 s_tabela = csv.reader(arquivo, delimiter=';')
 tabela = list(s_tabela)
 
-tabela[0].append("NIIN")
-tabela[0].append("Preço Médio Pesquisado (U$)")
-
-print(*tabela, sep='\n')
-
-
-    
+# Edição do cabeçalho da planilha
 tabela[0] = [
         'PN', 'CFF', 'NOMECLATURA', 'UN', 'PRICE UNIT(U$)', 'Retorno da busca', 'Comparação preço'
     ]
 
-
-#
+# Edição do corpo da planilha
 for indice, elemento in enumerate(tabela[1:]):
     PN = elemento[0]
     CFF = elemento[1]
@@ -124,10 +136,6 @@ for indice, elemento in enumerate(tabela[1:]):
         mensagem_de_precos = mensagem_quantidade_preços(NIIN)
         preco_medio_publog = float(pesquisar_preco_medio(NIIN))
         preco_da_planilha = float(elemento[4])
-
-        print(preco_da_planilha)
-        print(preco_medio_publog)
-
 
         elemento.append(f'{mensagem_de_precos} Preço médio: ${preco_medio_publog}.')
 
@@ -156,6 +164,4 @@ with open('Preços_PubLog_Comparados_Excel.csv', 'w', newline='') as arquivo_dat
 
     escritor = csv.writer(arquivo_data)
     escritor.writerow(separador)
-    escritor.writerows(tabela)
-
-          
+    escritor.writerows(tabela)      
