@@ -43,9 +43,7 @@ def pesquisar_niin(PN, CFF):
     
     string = (data.value.decode('utf-8'))
     lista = criar_lista(string)
-    print(lista[1])
-    return lista[1]
-    
+    return lista[1]    
 
 
 # 2º Etapa: Pesquisar Unit_Price utilizando NIIN acrescentando na Lista
