@@ -43,7 +43,8 @@ def pesquisar_niin(PN, CFF):
     
     string = (data.value.decode('utf-8'))
     lista = criar_lista(string)
-    return lista[1]    
+    return lista[1]
+    
 
 
 # 2º Etapa: Pesquisar Unit_Price utilizando NIIN acrescentando na Lista
@@ -95,7 +96,7 @@ def mensagem_quantidade_preços(NIIN):
 
 # As seguintes variáveis e constantes são necessárias para o acesso ao banco de dados do PubLog
 MAX_SIZE = 4096  # data & error buffer size in bytes
-PATH_TO_DLL = "publog\TOOLS\MS12\DecompDl64.dll" # Caminho relativo, presume
+PATH_TO_DLL = "publog\TOOLS\MS12\DecompDl64.dll" # Caminho relativo
 PATH_TO_FEDLOG = "publog" # Caminho relativo
 dll = CDLL(PATH_TO_DLL) # Carrega a DLL DecompDl64.dll na variável dll.
 path = c_char_p(bytes(PATH_TO_FEDLOG, encoding='utf-8')) # A função obtem um array de bytes usando a codificação especificada, no qual c_char_p é um ponteiro C char* para string PATH_TO_FEDLOG que aceita apenas um endereço inteiro ou um objeto em bytes.
@@ -111,7 +112,7 @@ if(dll.IMDConnectDLL(path)):
     print("Sample search using the return buffer:\n")
 
 # ABERTURA DO "arquivo.csv" PARA CONVERSÃO EM LISTA
-arquivo = open("arquivo.csv")
+arquivo = open("arquivo.csv", encoding='utf-8')
 s_tabela = csv.reader(arquivo, delimiter=';')
 tabela = list(s_tabela)
 
@@ -132,12 +133,20 @@ for indice, elemento in enumerate(tabela[1:]):
 
     elif NIIN != 0:
         mensagem_de_precos = mensagem_quantidade_preços(NIIN)
-        preco_medio_publog = float(pesquisar_preco_medio(NIIN))
-        preco_da_planilha = float(elemento[4])
-
+        preco_medio_publog = round(float(pesquisar_preco_medio(NIIN)), 2)
+        
+        try:
+            preco_da_planilha = float(elemento[4])
+        except:
+            variavel_elemento_4 = elemento[4].replace(',', '.')
+            preco_da_planilha = float(variavel_elemento_4)
+            
         elemento.append(f'{mensagem_de_precos} Preço médio: ${preco_medio_publog}.')
 
-        if preco_medio_publog > preco_da_planilha:
+        if preco_medio_publog == 0:
+            elemento.append(f'Preço médio do PubLog é 0.')    
+
+        elif preco_medio_publog > preco_da_planilha:
             resultado = round(((preco_medio_publog - preco_da_planilha) / preco_da_planilha * 100), 2)
             elemento.append(f'Preço médio do PubLog é {resultado}% mais caro.')
         
@@ -152,12 +161,12 @@ for indice, elemento in enumerate(tabela[1:]):
 
 
 # CRIAR PLANILHA NO FORMATO LIBRE OFFICE
-with open('Preços_PubLog_Comparados_LibreOffice.csv', 'w', newline='') as arquivo_data:
+with open('Preços_PubLog_Comparados_LibreOffice.csv', 'w', encoding='ANSI', newline='') as arquivo_data:
     escritor = csv.writer(arquivo_data)
     escritor.writerows(tabela)
 
 # CRIAR PLANILHA NO FORMATO EXCEL
-with open('Preços_PubLog_Comparados_Excel.csv', 'w', newline='') as arquivo_data:
+with open('Preços_PubLog_Comparados_Excel.csv', 'w', encoding=' ANSI', newline='') as arquivo_data:
     separador = ['sep=,']
 
     escritor = csv.writer(arquivo_data)
