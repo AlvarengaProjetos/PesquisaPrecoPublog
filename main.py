@@ -1,174 +1,247 @@
-import csv
+import os
+import pandas as pd
 import sys
 from ctypes import * # Importa toda a lib, está escrito de forma implícita.
+from io import StringIO
 
+#### INÍCIO do programa base do PubLog (NÃO MEXER) ###
 
-def criar_lista(string_tab):
-    """
-    Recebe uma string e retorna uma lista com sublistas sem Duplicatas de NIIN e FSC
-    """
-    lista = []
-    palavra = ""
-    for i in string_tab:
-        if i != '<':
-            if i == '>':
-                lista.append(palavra)
-                palavra = ""
-            elif i != '\n':
-                palavra = palavra + i
-    return lista
-    
-
-# 1º Etapa: Pesquisar NIIN através do PN e CFF(CAGE_CODE)
-def pesquisar_niin(PN, CFF):
-    """
-    A presente função receberá dados da lista chamada 'tabela' que é composta do cabeçalho da plnanilha 'arquivo.csv. 
-    Será printado no console se o PN foi encontrado e quantos foram encontrados no banco de dados do PubLog.
-    A função retornará o inteiro 0 se nada for econtrado, e se o PN for encontrado a função retorna o NIIN, que será um número inteiro maior do que 0.
-    """    
-    print("> Part Number: "+ PN + " - CFF: " + CFF)
-    consulta = (
-        "select NIIN from P_PART_PICK where PART_NUMBER='"+ PN +"'"+" AND CAGE_CODE='"+ CFF +"'"
-        ) 
-    comandoSQL = consulta.encode('utf-8') # Conversão da string para bytes
-    matches = dll.IMDSqlDLL(comandoSQL, data, length)
-
-    if matches == 0:
-        print("Part Number/CFF não encontrado.\n")
-        return 0
-    elif matches == 1:
-        print("Foi encontrado apenas 1 item.")
-    elif matches > 1:
-        print("Foram encontrados " + str(matches) + " itens.")
-    
-    string = (data.value.decode('utf-8'))
-    lista = criar_lista(string)
-    return lista[1]
-    
-
-
-# 2º Etapa: Pesquisar Unit_Price utilizando NIIN acrescentando na Lista
-def pesquisar_preco_medio(NIIN):
-    """
-    Essa função recebe o número inteiro NIIN oriúndo do retorno da função 'pesquisar_niin'.
-    Ela verifica no banco de dados do Publog quantos preços existem para o PN buscado.
-    Será printado no console quantos preços foram encontrados.
-    A função retornará a média dos preços encontrados.
-    """    
-    sniin = str(NIIN)
-    consulta = ("select UNIT_PRICE from V_FLIS_MANAGEMENT where NIIN='" + sniin.strip() + "'")
-    comandoSQL = consulta.encode('utf-8')  # Conversão da string para bytes
-    matches = dll.IMDSqlDLL(comandoSQL, data, length)
-    
-    if matches == 1:
-        print("Apenas um preço foi encontrado para este item.")
-    else:
-        print("Há " + str(matches) + " preços para este item.")
-    
-    string_preco_unidade = (data.value.decode('utf-8'))
-    lista = criar_lista(string_preco_unidade)
-    soma = 0
-    for i in lista[1:]:
-        soma = soma + float(i)
-    media = soma / (len(lista) - 1)
-    return media
-
-
-# Função para retorno de mensagem de quantidade de preços
-def mensagem_quantidade_preços(NIIN):
-    """
-    Essa função recebe o número inteiro NIIN oriúndo do retorno da função 'pesquisar_niin'.
-    Ela verifica no banco de dados do Publog quantos preços existem para o PN buscado.
-    A função retornará uma string informando via console quantos preços foram encontrados
-    """
-    sniin = str(NIIN)
-    consulta = ("select UNIT_PRICE from V_FLIS_MANAGEMENT where NIIN='" + sniin.strip() + "'")
-    comandoSQL = consulta.encode('utf-8')  # Conversão da string para bytes
-    matches = dll.IMDSqlDLL(comandoSQL, data, length)
-    
-    if matches == 1:
-        return "Apenas um preço foi encontrado para este item."
-    else:
-        return "Há " + str(matches) + " preços para este item."
-
-
-#---------------------------------- Programa Principal ---------------------------------
-
-# As seguintes variáveis e constantes são necessárias para o acesso ao banco de dados do PubLog
+# As seguintes variáveis e constantes são necessárias para o acesso ao banco de
+# dados do PubLog
 MAX_SIZE = 4096  # data & error buffer size in bytes
 PATH_TO_DLL = "publog\TOOLS\MS12\DecompDl64.dll" # Caminho relativo
 PATH_TO_FEDLOG = "publog" # Caminho relativo
 dll = CDLL(PATH_TO_DLL) # Carrega a DLL DecompDl64.dll na variável dll.
-path = c_char_p(bytes(PATH_TO_FEDLOG, encoding='utf-8')) # A função obtem um array de bytes usando a codificação especificada, no qual c_char_p é um ponteiro C char* para string PATH_TO_FEDLOG que aceita apenas um endereço inteiro ou um objeto em bytes.
-data = create_string_buffer(MAX_SIZE) # Cria um buffer de tamanho MAX_SIZE bytes.
-#error = create_string_buffer(MAX_SIZE)
+path = c_char_p(bytes(PATH_TO_FEDLOG, encoding='utf-8')) # A função obtem um 
+# array de bytes usando a codificação especificada, no qual c_char_p é um 
+# ponteiro C char* para string PATH_TO_FEDLOG que aceita apenas um endereço 
+# inteiro ou um objeto em bytes.
+data = create_string_buffer(MAX_SIZE) #Cria um buffer de tamanho MAX_SIZE bytes.
+error = create_string_buffer(MAX_SIZE)
 length = c_int(MAX_SIZE)
-
-print("Programa de Pesquisa de Preço por PN e CFF.\n\n")
 
 if(dll.IMDConnectDLL(path)):
     print("Invalid Path\n")
     sys.exit
     print("Sample search using the return buffer:\n")
+#### FIM do programa base do PubLog (NÃO MEXER) ####
 
-# ABERTURA DO "arquivo.csv" PARA CONVERSÃO EM LISTA
-arquivo = open("arquivo.csv", encoding='utf-8')
-s_tabela = csv.reader(arquivo, delimiter=';')
-tabela = list(s_tabela)
+def consulta_management_padrao(string_niin):
+    """
+    A função recebe NIIN em string.
+    A função retorna uma lista que contém uma string
+    
+    - lista_para_retorno = lista para armazenar o resultado da busca no PUBLOG
+    - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
+    receber o NIIN para fazer a busca, por isso há a concatenação da variável 
+    string_niin
+    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
+    - matches = executa a consulta própriamente dita
+    - data_convertida = o dado consultado decodificado   
+    """
+    
+    lista_para_retorno = []
+    consulta = ("select EFFECTIVE_DATE, MOE, AAC, SOS, UI, UNIT_PRICE, QUP, SLC ")
+    consulta2 = ("from V_FLIS_MANAGEMENT where NIIN='" + string_niin + "'")
+    comando_sql = (consulta + consulta2).encode('utf-8')
+    matches = dll.IMDSqlDLL(comando_sql, data, length)
+    data_convertida = data.value.decode('utf-8')
+    if data_convertida == '':
+        return False
+    else:
+        lista_para_retorno.extend([data_convertida])
+        #return(lista_para_retorno)
+        return(data_convertida)
 
-# Edição do cabeçalho da planilha
-tabela[0] = [
-        'PN', 'CFF', 'NOMECLATURA', 'UN', 'PRICE UNIT(U$)', 'Retorno da busca', 'Comparação preço'
-    ]
 
-# Edição do corpo da planilha
-for indice, elemento in enumerate(tabela[1:]):
-    PN = elemento[0]
-    CFF = elemento[1]
-    NIIN = pesquisar_niin(PN, CFF)
+def consulta_management_future(string_niin):
+    """
+    A função recebe NIIN em string.
+    A função retorna uma lista que contém uma string
+    
+    - lista_para_retorno = lista para armazenar o resultado da busca no PUBLOG
+    - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
+    receber o NIIN para fazer a busca, por isso há a concatenação da variável 
+    string_niin
+    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
+    - matches = executa a consulta própriamente dita
+    - data_convertida = o dado consultado decodificado   
+    """
+    
+    lista_para_retorno = []
+    consulta = ("select EFFECTIVE_DATE, MOE, AAC, SOS, UI, UNIT_PRICE, QUP, SLC ")
+    consulta2 = ("from V_FLIS_MANAGEMENT_FUTURE where NIIN='" + string_niin + "'")
+    comando_sql = (consulta + consulta2).encode('utf-8')
+    matches = dll.IMDSqlDLL(comando_sql, data, length)
+    data_convertida = data.value.decode('utf-8')
+    if data_convertida == '':
+        return False
+    else:
+        lista_para_retorno.extend([data_convertida])
+        return(lista_para_retorno)
 
-    if NIIN == 0:
-        elemento.append('Part Number/CFF não encontrado.')
-        elemento.append('Não há preço')
 
-    elif NIIN != 0:
-        mensagem_de_precos = mensagem_quantidade_preços(NIIN)
-        preco_medio_publog = round(float(pesquisar_preco_medio(NIIN)), 2)
+def filtrar_quantidade_digitos_string(i):
+    """
+    A função recebe uma string na variável i.
+    A função retorna o número dentro da string com 9 dígitos.
+    A ideia é transformar um NSN em um NIIN removendo os 4 primeiros dígitos e
+    completar com o dígito 0 caso a string tenha menos do que 9 dígitos. O 
+    motivo disso é possíveis erros dentro da planilha por se tratar do dígito
+    0 à esquerda.
+    
+    - a variavel i representa a string oriunda da planilha a ser filtrada
+    """
         
-        try:
-            preco_da_planilha = float(elemento[4])
-        except:
-            variavel_elemento_4 = elemento[4].replace(',', '.')
-            preco_da_planilha = float(variavel_elemento_4)
+    if len(i) < 9:
+        i = i.rjust(9, '0')
+        
+    while len(i) > 9:
+        i = i.replace(i[0], '', 1)
+    return i    
+
+
+def verificar_aac(string_niin):
+    """
+    A função recebe um NIIN em formato string e retorna um Boolean. 
+    A função retorna um Bool.
+    O retorno True acusa a presença de AAC não desejados.
+    
+    - AAC_nao_aceitaveis = Lista de AAC que não interessam ao usuário
+    - consulta = Comando SQL que recebe o NIIN em formato de string
+    - conmando_sql = Conversão da string para bytes, codificação do comando
+    - matches = O retorno da quantidade de itens buscados no PubLog
+    - data_convertida = O retorno da informação do PubLog decodificada
+    - data_temporaria = data_convertida sem caracteres especiais 
+    - data_filtrada = data_temporaria sem os três primeiros caracteres (AAC)
+    """
+    
+    try:
+        aac_nao_aceitaveis = ['F', 'L', 'P', 'V', 'X', 'Y', 'T']
+        consulta = (
+                    "select AAC, from V_FLIS_MANAGEMENT where NIIN='" + string_niin + "'"
+                    )
+        comando_sql = consulta.encode('utf-8')
+        matches = dll.IMDSqlDLL(comando_sql, data, length)
+        data_convertida = data.value.decode('utf-8')
+        data_temporaria = "".join(c for c in data_convertida if c.isalnum())
+        data_filtrada = data_temporaria[3:]
+        print(data_filtrada) # REMOVER ESSA LINHA APÓS TESTES
+        return (set(data_filtrada) <= set(aac_nao_aceitaveis))
+        # retorna True se todos os aac baterem com os aac não aceitaveis
+                       
+    except: # Ainda são desconhecidos possíveis erros específicos para tratar
+        print(f'Erro na função verificar_aac. Foi usado o NIIN {string_niin}')
+
+
+def verificar_ui_box_pg(string_niin):
+    """
+    A função recebe o NIIN em string.
+    A função retorna o Bool True se o NIIN tiver PG ou BX
+    
+    - string_niin = NIIN em formato string recebida
+    - ui_pg = string dos caracteres que se deseja verificar o UI
+    - ui_bx = string dos caracteres que se deseja verificar o UI
+    - consulta = comando SQL para buscar o UI do NIIN, é necessário receber o NIIN
+    para fazer a busca, por isso há a concatenação da variável string_niin
+    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
+    - matches = executa a consulta própriamente dita
+    - data_convertida = o dado consultado decodificado
+    - data_temporaria = data_convertida sem caractéres que não sejam números e 
+    letras
+    - data_filtrada = data_convertida retidado os caractéres UI da string,
+    sobrando PG ou BX no dado filtrado
+    - ui_pg_presente = lógica para verificar se o dado do PUBLOG é UI que se quer
+    verificar
+    - ui_bx_presente = lógica para verificar se o dado do PUBLOG é UI que se quer
+    verificar
+    """
+    
+    try:
+        ui_pg = 'PG' 
+        ui_bx = 'BX'
+        consulta = (
+                    "select UI, from V_FLIS_MANAGEMENT where NIIN='" + string_niin + "'"
+                    )
+        comando_sql = consulta.encode('utf-8')
+        matches = dll.IMDSqlDLL(comando_sql, data, length)
+        data_convertida = data.value.decode('utf-8')
+        data_temporaria = "".join(c for c in data_convertida if c.isalnum())
+        data_filtrada = data_temporaria[2:]
+        ui_pg_presente = (set(data_filtrada) <= set(ui_pg))
+        ui_bx_presente = (set(data_filtrada) <= set(ui_bx))        
+        print(set(data_filtrada) <= set(ui_pg)) # REMOVER ESSA LINHA APÓS TESTES
+        if ui_bx_presente or ui_pg_presente:
+            return True    
+                       
+    except: # Ainda são desconhecidos possíveis erros específicos para tratar
+        print(f'Erro na função verificar_ui_box_pg. Foi usado o NIIN {string_niin}.')
+        
+
+def consultar_quantidade_box_pg(string_niin):
+    """
+    A função recebe NIIN em string.
+    A função retorna ... a função não retorna nada
+    
+    - consulta = comando SQL para buscar o PHRASE_STATEMENT do NIIN, é necessário
+    receber o NIIN
+    para fazer a busca, por isso há a concatenação da variável string_niin
+    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
+    - matches = executa a consulta própriamente dita
+    - data_convertida = o dado consultado decodificado    
+    - ...
+
+    """
+        
+    consulta = (
+                "select PHRASE_STATEMENT, from V_FLIS_PHRASE where NIIN='" + string_niin + "'"
+                )
+    comando_sql = consulta.encode('utf-8')
+    matches = dll.IMDSqlDLL(comando_sql, data, length)
+    data_convertida = data.value.decode('utf-8')
+    print('*****CONSULTANDO BOX***** ' + string_niin) # REMOVER ESSA LINHA APÓS TESTES
+    print([data_convertida])
+    return data_convertida
+
+
+def main(lista_de_niin):
+    for string in lista_de_niin: 
+        string = filtrar_quantidade_digitos_string(str(string))
+        
+        if verificar_aac(string): # Verifica o aac
+            print(f'o NIIN {string}, tem o aac não desejável')
+            # Função pra jogar informação na planilhas
+            continue
+        
+        if verificar_ui_box_pg(string):
+            consultar_quantidade_box_pg(string)
+        
+        if consulta_management_future(string):
+            a = (consulta_management_future(string)) 
+            print(a) # REMOVER ESSA LINHA APÓS TESTES
+            print('*****FUTURO***** ' + string) # REMOVER ESSA LINHA APÓS TESTES
+            continue
+            # Função pra jogar informação na planilha       
+        
+        if consulta_management_padrao(string):
+            a = (consulta_management_padrao(string)) 
+            print(a) # REMOVER ESSA LINHA APÓS TESTES
+            print('*****PADRAO***** ' + string) # REMOVER ESSA LINHA APÓS TESTES
+            # Função pra jogar informação na planilha  
+            df = pd.read_csv(StringIO(a), sep='|')
+            print(df)
             
-        elemento.append(f'{mensagem_de_precos} Preço médio: ${preco_medio_publog}.')
+os.system('cls') # limpar console
+print("Programa de Pesquisa de Preço por NIIN.\n\n") # REMOVER ESSA LINHA APÓS TESTES
 
-        if preco_medio_publog == 0:
-            elemento.append(f'Preço médio do PubLog é 0.')    
+# Ler o arquivo csv
+df = pd.read_csv("arquivo_niin.csv")
+col_list = df.NSN.values.tolist()
 
-        elif preco_medio_publog > preco_da_planilha:
-            resultado = round(((preco_medio_publog - preco_da_planilha) / preco_da_planilha * 100), 2)
-            elemento.append(f'Preço médio do PubLog é {resultado}% mais caro.')
-        
-        elif preco_medio_publog < preco_da_planilha:
-            resultado = round(((preco_da_planilha - preco_medio_publog) / preco_medio_publog * 100), 2)
-            elemento.append(f'Preço médio do PubLog é {resultado}% mais barato.') 
-
-        else:
-            elemento.append(f'O preço médio do PubLog é igual ao preço da planilha.') 
-        
-        print("Preço médio: $"+ str(preco_medio_publog)+".\n\n")
+lista_teste = ['15600022901']
+main(col_list)
+#main(lista_teste)
 
 
-# CRIAR PLANILHA NO FORMATO LIBRE OFFICE
-with open('Preços_PubLog_Comparados_LibreOffice.csv', 'w', encoding='ANSI', newline='') as arquivo_data:
-    escritor = csv.writer(arquivo_data)
-    escritor.writerows(tabela)
-
-# CRIAR PLANILHA NO FORMATO EXCEL
-with open('Preços_PubLog_Comparados_Excel.csv', 'w', encoding=' ANSI', newline='') as arquivo_data:
-    separador = ['sep=,']
-
-    escritor = csv.writer(arquivo_data)
-    escritor.writerow(separador)
-    escritor.writerows(tabela)      
+# df = pd.read_csv(StringIO(data), sep='|')
+# df.to_csv()
