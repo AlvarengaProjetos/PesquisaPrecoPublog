@@ -26,68 +26,92 @@ if(dll.IMDConnectDLL(path)):
     print("Sample search using the return buffer:\n")
 #### FIM do programa base do PubLog (NÃO MEXER) ####
 
-def consulta_management_padrao(string_niin):
-    """
-    A função recebe NIIN em string.
-    A função retorna uma lista que contém uma string
-    
-    - lista_para_retorno = lista para armazenar o resultado da busca no PUBLOG
-    - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
-    receber o NIIN para fazer a busca, por isso há a concatenação da variável 
-    string_niin
-    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
-    - matches = executa a consulta própriamente dita
-    - data_convertida = o dado consultado decodificado   
-    """
-    
-    lista_para_retorno = []
-    consulta = ("select EFFECTIVE_DATE, MOE, AAC, SOS, UI, UNIT_PRICE, QUP, SLC ")
-    consulta2 = ("from V_FLIS_MANAGEMENT where NIIN='" + string_niin + "'")
-    comando_sql = (consulta + consulta2).encode('utf-8')
-    matches = dll.IMDSqlDLL(comando_sql, data, length)
-    data_convertida = data.value.decode('utf-8')
-    if data_convertida == '':
-        return False
-    else:
-        lista_para_retorno.extend([data_convertida])
-        #return(lista_para_retorno)
-        return(data_convertida)
-
-
 def consulta_management_future(string_niin):
     """
     A função recebe NIIN em string.
-    A função retorna uma lista que contém uma string
+    A função retorna uma uma string contendo os dados solicitados.
     
-    - lista_para_retorno = lista para armazenar o resultado da busca no PUBLOG
     - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
     receber o NIIN para fazer a busca, por isso há a concatenação da variável 
     string_niin
+    - consulta2 = continuação da variável consulta
     - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
-    - matches = executa a consulta própriamente dita
+    - matches = executa a consulta própriamente dita, muito embora é uma variável
+    que não é chamada ela é necessária para a função funcionar de forma adequada
     - data_convertida = o dado consultado decodificado   
     """
-    
-    lista_para_retorno = []
-    consulta = ("select EFFECTIVE_DATE, MOE, AAC, SOS, UI, UNIT_PRICE, QUP, SLC ")
+
+    consulta = ("select NIIN, EFFECTIVE_DATE, MOE, AAC, SOS, UI, UNIT_PRICE, QUP, SLC ")
     consulta2 = ("from V_FLIS_MANAGEMENT_FUTURE where NIIN='" + string_niin + "'")
     comando_sql = (consulta + consulta2).encode('utf-8')
     matches = dll.IMDSqlDLL(comando_sql, data, length)
     data_convertida = data.value.decode('utf-8')
+    data_convertida = data_convertida.replace('<', '').replace('>', '')
     if data_convertida == '':
         return False
     else:
-        lista_para_retorno.extend([data_convertida])
-        return(lista_para_retorno)
+        return(data_convertida)
 
 
-def filtrar_quantidade_digitos_string(i):
+def consulta_management_padrao(string_niin):
+    """
+    A função recebe NIIN em string.
+    A função retorna uma uma string contendo os dados solicitados.
+    
+    - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
+    receber o NIIN para fazer a busca, por isso há a concatenação da variável 
+    string_niin
+    - consulta2 = continuação da variável consulta
+    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
+    - matches = executa a consulta própriamente dita, muito embora é uma variável
+    que não é chamada ela é necessária para a função funcionar de forma adequada
+    - data_convertida = o dado consultado decodificado   
+    """
+    
+    consulta = ("select NIIN, EFFECTIVE_DATE, MOE, AAC, SOS, UI, UNIT_PRICE, QUP, SLC ")
+    consulta2 = ("from V_FLIS_MANAGEMENT where NIIN='" + string_niin + "'")
+    comando_sql = (consulta + consulta2).encode('utf-8')
+    matches = dll.IMDSqlDLL(comando_sql, data, length)
+    data_convertida = data.value.decode('utf-8')
+    data_convertida = data_convertida.replace('<', '').replace('>', '')
+    if data_convertida == '':
+        return False
+    else:
+        return data_convertida
+
+
+def consulta_quantidade_box_pg(string_niin):
+    """
+    A função recebe NIIN em string.
+    A função retorna uma uma string contendo os dados solicitados.
+    
+    - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
+    receber o NIIN para fazer a busca, por isso há a concatenação da variável 
+    string_niin
+    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
+    - matches = executa a consulta própriamente dita, muito embora é uma variável
+    que não é chamada ela é necessária para a função funcionar de forma adequada
+    - data_convertida = o dado consultado decodificado    
+    """
+        
+    consulta = (
+                "select PHRASE_STATEMENT, from V_FLIS_PHRASE where NIIN='" + string_niin + "'"
+                )
+    comando_sql = consulta.encode('utf-8')
+    matches = dll.IMDSqlDLL(comando_sql, data, length)
+    data_convertida = data.value.decode('utf-8')
+    return data_convertida
+
+
+def filtrar_quantidade_digitos_niin(i):
     """
     A função recebe uma string na variável i.
     A função retorna o número dentro da string com 9 dígitos.
+    
+    Essa função trata o niin recebido na planilha fornecida pelo usuário.
     A ideia é transformar um NSN em um NIIN removendo os 4 primeiros dígitos e
     completar com o dígito 0 caso a string tenha menos do que 9 dígitos. O 
-    motivo disso é possíveis erros dentro da planilha por se tratar do dígito
+    motivo disso são possíveis erros dentro da planilha por se tratar do dígito
     0 à esquerda.
     
     - a variavel i representa a string oriunda da planilha a ser filtrada
@@ -103,11 +127,12 @@ def filtrar_quantidade_digitos_string(i):
 
 def verificar_aac(string_niin):
     """
-    A função recebe um NIIN em formato string e retorna um Boolean. 
-    A função retorna um Bool.
-    O retorno True acusa a presença de AAC não desejados.
+    A função recebe um NIIN em formato string. 
+    A função retorna um Boolean.
+    Caso acuse a presença de AAC não desejados ou o item não seja escontrado no
+    banco de dados do PubLog a função retornará True.
     
-    - AAC_nao_aceitaveis = Lista de AAC que não interessam ao usuário
+    - aac_nao_aceitaveis = Lista de AAC que não interessam ao usuário
     - consulta = Comando SQL que recebe o NIIN em formato de string
     - conmando_sql = Conversão da string para bytes, codificação do comando
     - matches = O retorno da quantidade de itens buscados no PubLog
@@ -126,9 +151,7 @@ def verificar_aac(string_niin):
         data_convertida = data.value.decode('utf-8')
         data_temporaria = "".join(c for c in data_convertida if c.isalnum())
         data_filtrada = data_temporaria[3:]
-        print(data_filtrada) # REMOVER ESSA LINHA APÓS TESTES
         return (set(data_filtrada) <= set(aac_nao_aceitaveis))
-        # retorna True se todos os aac baterem com os aac não aceitaveis
                        
     except: # Ainda são desconhecidos possíveis erros específicos para tratar
         print(f'Erro na função verificar_aac. Foi usado o NIIN {string_niin}')
@@ -137,15 +160,18 @@ def verificar_aac(string_niin):
 def verificar_ui_box_pg(string_niin):
     """
     A função recebe o NIIN em string.
-    A função retorna o Bool True se o NIIN tiver PG ou BX
+    A função retorna o Bool True se o NIIN tiver PG ou BX no banco de dados do 
+    PubLog.
     
     - string_niin = NIIN em formato string recebida
     - ui_pg = string dos caracteres que se deseja verificar o UI
     - ui_bx = string dos caracteres que se deseja verificar o UI
-    - consulta = comando SQL para buscar o UI do NIIN, é necessário receber o NIIN
-    para fazer a busca, por isso há a concatenação da variável string_niin
+    - consulta = comando SQL para buscar os vários dados do NIIN, é necessário
+    receber o NIIN para fazer a busca, por isso há a concatenação da variável 
+    string_niin
     - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
-    - matches = executa a consulta própriamente dita
+    - matches = executa a consulta própriamente dita, muito embora é uma variável
+    que não é chamada ela é necessária para a função funcionar de forma adequada
     - data_convertida = o dado consultado decodificado
     - data_temporaria = data_convertida sem caractéres que não sejam números e 
     letras
@@ -170,7 +196,6 @@ def verificar_ui_box_pg(string_niin):
         data_filtrada = data_temporaria[2:]
         ui_pg_presente = (set(data_filtrada) <= set(ui_pg))
         ui_bx_presente = (set(data_filtrada) <= set(ui_bx))        
-        print(set(data_filtrada) <= set(ui_pg)) # REMOVER ESSA LINHA APÓS TESTES
         if ui_bx_presente or ui_pg_presente:
             return True    
                        
@@ -178,70 +203,65 @@ def verificar_ui_box_pg(string_niin):
         print(f'Erro na função verificar_ui_box_pg. Foi usado o NIIN {string_niin}.')
         
 
-def consultar_quantidade_box_pg(string_niin):
-    """
-    A função recebe NIIN em string.
-    A função retorna ... a função não retorna nada
-    
-    - consulta = comando SQL para buscar o PHRASE_STATEMENT do NIIN, é necessário
-    receber o NIIN
-    para fazer a busca, por isso há a concatenação da variável string_niin
-    - comando_sql = variável consulta codigicada para acessar o banco do PUBLOG
-    - matches = executa a consulta própriamente dita
-    - data_convertida = o dado consultado decodificado    
-    - ...
-
-    """
-        
-    consulta = (
-                "select PHRASE_STATEMENT, from V_FLIS_PHRASE where NIIN='" + string_niin + "'"
-                )
-    comando_sql = consulta.encode('utf-8')
-    matches = dll.IMDSqlDLL(comando_sql, data, length)
-    data_convertida = data.value.decode('utf-8')
-    print('*****CONSULTANDO BOX***** ' + string_niin) # REMOVER ESSA LINHA APÓS TESTES
-    print([data_convertida])
-    return data_convertida
-
-
 def main(lista_de_niin):
-    for string in lista_de_niin: 
-        string = filtrar_quantidade_digitos_string(str(string))
-        
-        if verificar_aac(string): # Verifica o aac
-            print(f'o NIIN {string}, tem o aac não desejável')
-            # Função pra jogar informação na planilhas
+    """
+    Documentação do MAIN
+    
+    
+    """   
+    
+    df_vazio = {
+        'NIIN': [], 'EFFECTIVE_DATE': [], 'MOE': [], 'AAC': [], 'SOS': [], 
+        'UI': [], 'UNIT_PRICE': [], 'QUP': [], 'SLC': [], 'PG_BX': []
+        }
+    df_final = pd.DataFrame(df_vazio)
+    print('Aguarde, o programa está rodando.')
+    
+    for niin in lista_de_niin: 
+        niin = filtrar_quantidade_digitos_niin(str(niin))       
+        if verificar_aac(niin): 
+            df_aac = pd.DataFrame(
+                {
+                'NIIN': [niin],
+                'AAC': ['Item não encontrado ou AAC não desejável: F, L, P, V, X, Y, T']
+                }
+            )
+            df_para_concatenar = [df_final, df_aac]
+            df_final = pd.concat(df_para_concatenar)
+            continue  
+            
+        if consulta_management_future(niin):
+            resultado_busca = (consulta_management_future(niin)) 
+            df = pd.read_csv(StringIO(resultado_busca), sep='|')
+            df = pd.DataFrame(df)
+            if verificar_ui_box_pg(niin):
+                retorno_ui_box_pg = consulta_quantidade_box_pg(niin)
+                retorno_ui_box_pg = retorno_ui_box_pg.replace('<PHRASE_STATEMENT>', '')
+                retorno_ui_box_pg = (' '.join(dict.fromkeys(retorno_ui_box_pg.split())))
+                df['PG_BX'] = retorno_ui_box_pg
+            df_final = pd.concat([df_final, df])
             continue
-        
-        if verificar_ui_box_pg(string):
-            consultar_quantidade_box_pg(string)
-        
-        if consulta_management_future(string):
-            a = (consulta_management_future(string)) 
-            print(a) # REMOVER ESSA LINHA APÓS TESTES
-            print('*****FUTURO***** ' + string) # REMOVER ESSA LINHA APÓS TESTES
-            continue
-            # Função pra jogar informação na planilha       
-        
-        if consulta_management_padrao(string):
-            a = (consulta_management_padrao(string)) 
-            print(a) # REMOVER ESSA LINHA APÓS TESTES
-            print('*****PADRAO***** ' + string) # REMOVER ESSA LINHA APÓS TESTES
-            # Função pra jogar informação na planilha  
-            df = pd.read_csv(StringIO(a), sep='|')
-            print(df)
+              
+        if consulta_management_padrao(niin):
+            resultado_busca = (consulta_management_padrao(niin)) 
+            df = pd.read_csv(StringIO(resultado_busca), sep='|')
+            df = pd.DataFrame(df)
+            if verificar_ui_box_pg(niin):
+                retorno_ui_box_pg = consulta_quantidade_box_pg(niin)
+                retorno_ui_box_pg = retorno_ui_box_pg.replace('<PHRASE_STATEMENT>', '')
+                retorno_ui_box_pg = (' '.join(dict.fromkeys(retorno_ui_box_pg.split())))
+                df['PG_BX'] = retorno_ui_box_pg
+            df_final = pd.concat([df_final, df])
+            
+    df_final.to_csv(r'df_final.csv', encoding='utf-8', index=False)
+    print('Programa finalizado.')
+    
             
 os.system('cls') # limpar console
-print("Programa de Pesquisa de Preço por NIIN.\n\n") # REMOVER ESSA LINHA APÓS TESTES
+print("Programa de Pesquisa de Preço por NIIN.\n\n")
 
 # Ler o arquivo csv
 df = pd.read_csv("arquivo_niin.csv")
 col_list = df.NSN.values.tolist()
 
-lista_teste = ['15600022901']
 main(col_list)
-#main(lista_teste)
-
-
-# df = pd.read_csv(StringIO(data), sep='|')
-# df.to_csv()
