@@ -3,10 +3,10 @@
 import pandas as pd
 import streamlit as st
 import sys
-import tkinter as tk
+# import tkinter as tk
 from ctypes import * # Importa toda a lib, está escrito de forma implícita.
 from io import StringIO
-from tkinter import filedialog
+# from tkinter import filedialog
 
 def main():
     """
